@@ -1,0 +1,341 @@
+---
+title: "PSTAT 131 Homework One"
+author: "Lilian Lu and Ted Tinker"
+date: "10/8/2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+# install.packages("knitr")
+# install.packages("readr")
+# install.packages("tibble")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+# instal.packages("graphics")
+
+library(knitr)
+library(readr)
+library(tibble)
+library(dplyr)
+library(ggplot2)
+library(graphics)
+# set global chunk options: images will be 7x5 inches
+knitr::opts_chunk$set(fig.width=7, fig.height=5)
+options(digits = 4)
+
+
+## indents are for indenting r code as formatted text
+## They may need to be adjusted depending on your OS
+# if your output looks odd, increase or decrease indent
+indent1 = '    '
+indent2 = '        '
+indent3 = '            '
+```
+
+```{r data_input, include=FALSE}
+setwd("/Users/Theodore/Desktop/R_Studio_Stuff/data")
+algae <- read_table2("algaeBloom.txt", col_names=
+c('season','size','speed','mxPH','mnO2','Cl','NO3','NH4',
+'oPO4','PO4','Chla','a1','a2','a3','a4','a5','a6','a7'),
+na="XXXXXXX")
+glimpse(algae) #summary
+
+```
+
+\section*{1}
+\subsection*{(a)}
+Having installed and loaded the relevant packages,
+```{r groupSeason}
+algae %>% group_by(season) %>% summarise(count = n()) # Group algae by season, then summarise
+```
+All four seasons are well-represented in the data.
+
+\subsection*{(b)} The number of missing values for each column:
+```{r reportNA}
+colSums(is.na(algae)) # Report missing values in each variable
+```
+Most of the variables have almost all of their values. Chloride and Clorophyll have the most missing entries.
+
+The mean and variance for each chemical:
+```{r meanAndVariance}
+colMeans(algae[6:11],na.rm = TRUE)  # Find mean in each column 6 through 11
+sapply(algae[6:11], var,na.rm=TRUE) # Find variance of each column 6 through 11
+```
+The variances seems high, often an order of magnitude above the mean. Ammonium, in particular, has a variance 7600 times its mean.  
+
+\clearpage
+\subsection*{(c)}
+$MAD = median(|X_i - median(X)|)$
+```{r meadianAndMAD}
+(med<-sapply(algae[6:11], median,na.rm=TRUE)) # Median of columns 6 through 11
+temp<- rep(0,6) # Empty list
+for (i in 1:6){
+  temp[i]<-abs(algae[5+i][1]-med[i])} # Enter absolute value of residual from median
+(MAD<-sapply(temp,median,na.rm=TRUE)) # Find medians of absolute residuals
+```
+The MAD is the median of the absolute values of the residuals from the median. For example, the Median Absolute Residual for Chloride samples was 22.427, so (if we're understanding this correctly) 50% of chloride samples differ from the median Chloride sample by less than 22.427 units, and 50% of Chloride samples differ from the median Chloride sample by more than 22.427 units. 
+
+The medians are similar in scale to the means, but the MADs are within an order of magnitude of the medians whereas the variances were huge. The median and MAD are therefore better measurements of central tendency and data spread for this dataset. 
+
+\section*{2}
+\subsection*{(a)}
+```{r makePlot1, warning=FALSE,MESSAGE=FALSE,fig.height = 3.5,fig.align = "center"}
+(myPlot <- ggplot(algae,aes(x=algae$mxPH))+ geom_histogram(aes(y=..density..),binwidth =
+0.1)+ylab("Probablity") + xlab("Maximum PH") + ggtitle("Histogram of mxPH"))
+```
+
+The distribution resembles the typical bell-curve, but it appears to be skewed left. 
+
+\subsection*{(b)}
+
+```{r addRug, warning=FALSE,MESSAGE=FALSE,fig.height = 3,fig.align = "center"}
+myPlot+geom_density() + geom_rug(aes(x=algae$mxPH)) # Add density and rug
+```
+The rug-plot gives a more precise visualization of the data clusters. The density plot fits the data well, confirming a general bell-shape. 
+
+\section*{(c)}
+```{r makeBoxes, fig.height = 3,fig.align = "center"}
+algsize<- algae %>% group_by(size) # Group algae by size
+(plot2<-ggplot(algsize,aes(x=size,y=a1))+geom_boxplot()+ggtitle("A Conditioned Boxplot of Algal a1"))
+```
+
+The smallest samples appear to have the largest concentration of a1 algae, but the presence of outliers makes these plots difficult to compare. 
+
+\subsection*{(d)}
+```{r NO3box, fig.height = 3.5,fig.align = "center"}
+(plot3<-boxplot(algae$NO3,horizontal=TRUE)) # Make a boxplot of nitrate levels
+```
+There is one point which should be considered an outlier by any reasonable metric. There are four data points which R labels outliers because they are outside $1.5 \times$ the Interquartial Range (and therefore displays as dots outside the box-and-whisker plot above), but which seem close enough to the mass of points to call them non-outlying.
+```{r NH4box, fig.height = 3,fig.align = "center"}
+(plot4<-boxplot(algae$NH4,horizontal=TRUE)) # Make boxplot of ammonium levels
+```
+
+There are 27 data points outside the $1.5 \times$ IQR rule-of-thumb, but their arrangement makes me suspect $NH4$ concentration should be evaluated on a log-scale or after some other transformation. The fourth quartile is by far the largest, and the outlying points suggest a clear ``stretching-out'' of the data's tail.
+
+\subsection*{(e)}
+Looking back the results from 1b and 1c we see that the variance for $NO3$ is only three times larger than its mean, the smallest of the discrepencies between mean and variance. But for $NH4$, the variance is 7600 times larger than the mean! The MAD appears more robust with respect to outliers, as both $NH4$ and $NO3$ can be understood in the context of medians. 
+
+\section*{3}
+\subsection*{(a)}
+```{r reporIncomplete} 
+sum(is.na(algae)) # Number of NA values
+sum(rowSums(is.na(algae))>=1) # Number of rows with at least one NA
+```
+There are 33 missing values. Some of these entries share a row, so there are only 16 rows (or ``observations'') containing an $n/a$.
+
+Revisiting this table from Problem One, Part (b):
+```{r reportNA2}
+colSums(is.na(algae)) # Report missing values in each variable
+```
+Most of the variables have almost all of their values. Chloride and Clorophyll have the most missing entries.
+
+
+\subsection*{(b)}
+
+```{r makeAlgaeDel}
+algae.del <- filter(algae,rowSums(is.na(algae))==0) # Make algae.del using rows of algae with no NA
+nrow(algae.del) # Print number of rows
+```
+There are 184 observations in $algae.del$. This is to be expected, as there are 200 observations in $algae$ and 16 rows with $n/a$ entries (found in part a).
+
+\clearpage
+\subsection*{(c)}
+
+```{r makeAlgaeMed}
+algae.med <- algae %>% mutate_at(vars(mxPH:Chla),funs(ifelse(is.na(.),median(algae.del$.),.)))
+  # Uses mutate_at instead of mutate_each for clearer syntax. 
+  # Mutates each column featuring NAs (found in part a) to either use the real value if available
+  # or the median of the cleaned data if not
+nrow(algae.med) # Print number of rows
+```
+This has 200 observations, which is equal to the number of entries in $algae$, as expected.
+
+```{r printRows}
+algae.med[c(48,62,199),] # Print the rows specified
+```
+As expected, these rows have no $n/a$ entries. (In the $algae$ tibble, these three rows account for 13 of the $n/a$s.)
+
+\subsection*{(d)}
+
+```{r correlation}
+cor(select(algae.del,c(mxPH:a7))) # Finds correlation of numeric variables of algae.del
+```
+$PO4$ and $oPO4$ are highly correlated (at .991965). Therefore it makes sense to try to fill missing entries of $PO4$ using $oPO4$.
+```{r showValues}
+algae[28,c("PO4","oPO4")] # Shows missing value and value to reconstruct from
+```
+
+```{r makeLinearModel}
+myPrediction <- lm(PO4 ~ oPO4,algae.del) # Use algae.del to make a linear model
+summary(myPrediction)
+```
+Our linear model has an intercept of 47.0802 and a slope of 1.2712. Knowing the $oPO4$ in this row is 4, we may fill $PO4$ using the model's prediction:
+
+```{r predict}
+algae[28,"PO4"] <- predict(myPrediction,algae[28,"oPO4"]) # Replace the missing value with the model. 
+algae[28,"PO4"] # Shows value after modeling 
+```
+
+
+
+\section*{4}
+\subsection*{(a)}
+```{r seedAndFold}
+set.seed(100) # For reproducibility
+(fold<-cut(1:nrow(algae.med),breaks=5,labels=FALSE) %>% sample()) # Cut data into five
+```
+
+\subsection*{(b)}
+This section utylizes the code given in the problem. 
+```{r crossAnalyze}
+do.chunk <- function(chunkid, chunkdef, dat) { # function argument
+  train = (chunkdef!= chunkid)
+  Xtr = dat[train,1:11] # get training set
+  Ytr = dat[train,12] # get true response values in trainig set
+  Xvl = dat[!train,1:11] # get validation set
+  Yvl = dat[!train,12] # get true response values in validation set
+  lm.a1 <- lm(a1~., data = dat[train,1:12])
+  predYtr = predict(lm.a1) # predict training values
+  predYvl = predict(lm.a1,Xvl) # predict validation values
+  data.frame(fold = chunkid,train.error = mean((predYtr - Ytr)^2), # compute and store training error 
+  val.error = mean((predYvl - Yvl)^2)) # compute and store test error
+} # The code above is copied from the homework
+
+lapply(1:5, function(z) {do.chunk(z,fold,algae.med)}) 
+  # For each chunk's model, find test/training error
+```
+
+The average test error is 326. The training errors are generally consistent, ranging from 271.6 to 291.2. This is because all models fit the training data, as expected.
+
+
+\section*{5}
+
+```{r setUp2, include=FALSE}
+setwd("/Users/Theodore/Desktop/R_Studio_Stuff/data")
+algae.test <- read_table2('algaeTest.txt', col_names=c('season','size','speed','mxPH','mnO2','Cl','NO3','NH4','oPO4','PO4','Chla','a1'),na=c('XXXXXXX'))
+```
+
+Having loaded the new dataset, we use it to evaluate the `true' test error of the model approximated in part four.
+
+```{r testVSmoreData}
+Xtr = algae.med[1:11]   # The trainest set
+Ytr = algae.med[12]     # Get real values for training data
+Xvl = algae.test[1:11]      # Predictors for test data
+Yvl = algae.test[12]        # Real values for test data
+ourModel <- lm(a1~., data = algae.med[1:12])      # Make model
+predYtr = predict(ourModel,newdata = algae.med[1:11])   # Predict 
+predYvl = predict(ourModel,newdata=algae.test[1:11]) # predict validation values
+data.frame(train.error = mean((predYtr - Ytr)^2), # compute and store training error 
+val.error = mean((predYvl - Yvl)^2))
+```
+
+This test error is actually lower than when we predicted it should be given cross-validation! It decreased more than 75 points. 
+
+\clearpage
+\section*{6}
+
+```{r installISLR}
+# install.packages("ISLR")
+library(ISLR)
+```
+
+\subsection*{(a)}
+
+```{r makeWagePlot}
+(wagePlot <- ggplot(Wage, aes(x=age,y=wage))+geom_point() + geom_smooth())
+```
+
+The first noticable trait in this data is significant banding. There are two  major clusters of wage-level, one from almost no wages to 200 units, and another around 275 wage units. This matches my personal expectation, that age would be relevant to wage but that wages would also be distributed along class lines and race factors. Perhaps this banding could be due to sampling error; maybe wages above a certain level were rounded down to 275. It's difficult to tell with just the plot as it is. 
+
+Moreover, examining the smooth curve, wage generally increases through a person's twenties but levels off in their forties. After age sixty wage seems to decline, but the variance of these points is far higher. This may be because of a smaller sample size for the elderly. 
+
+
+\subsection*{(b)}
+
+\subsubsection*{(i)}
+Fit the linear regression
+```{r linear regression}
+linearpred<-lm(wage~poly(age,10,raw = FALSE),Wage)
+summary(linearpred)
+```
+
+\subsubsection*{(ii)}
+```{r moreSeedAndFolds, include=FALSE}
+set.seed(200) # For reproducibility
+(fold2<-cut(1:nrow(Wage),breaks=5,labels=FALSE) %>% sample()) # Cut data into five
+```
+
+The following is adapted from the hint posted on Piazza
+```{r testEstimation}
+
+do.chunk.poly <- function(chunkid, chunkdef, dat, p){  # function argument
+
+  train = (chunkdef != chunkid)
+  
+  Xtr = dat[train,]$age  # get training set
+  Ytr = dat[train,]$wage  # get true response values in trainig set
+  
+  Xvl = dat[!train,]$age  # get validation set
+  Yvl = dat[!train,]$wage  # get true response values in validation set
+  
+  ## at the end of this function you should return p, which fold you are testing on
+  ## and the training error and test error
+  ## This is an empty data frame which will include your results at the end
+  
+   
+  res = data.frame(degree=integer(), fold=integer(),
+                   train.error=double(), val.error=double())
+  
+
+   if (p==0) {
+    lm.wage <- lm(wage~1, data = dat[train,])
+}
+  else {
+
+    lm.wage<-lm(wage~poly(age, degree = p,raw=FALSE), data= dat[train,])
+    
+  }
+
+    predYvl = predict(lm.wage, newdata=dat[!train,])
+    predYtr = predict(lm.wage) # predict training values
+    fold = chunkid
+    
+
+    data.frame(degree=p, fold = chunkid, train.error = mean((predYtr - Ytr)^2),
+               val.error = mean((predYvl - Yvl)^2))
+    
+}
+
+# compute and store test error  
+## return training and test error for current chunk / polynomial p
+# get training/validation error for each fold/each model
+test.list = rep(0,11)
+training.list = rep(0,11)
+for (p in 0:10) {
+    result<-lapply(1:5, function(z) {do.chunk.poly(z,fold2,Wage,p)})
+  ## call do.chunk.poly on each fold for order p (follow problem 4 as an example)
+    test.list[p+1] <- (result[[1]]$val.error + result[[2]]$val.error + result[[3]]$val.error +
+                         result[[4]]$val.error + result[[5]]$val.error)/5
+    training.list[p+1] <- (result[[1]]$train.error + result[[2]]$train.error + 
+                             result[[3]]$train.error + result[[4]]$train.error + 
+                             result[[5]]$train.error)/5
+}
+## plot and test and train errors from result of cross validation
+
+print(test.list)
+print(training.list)
+```
+The first row shows the average test error in 5-fold cross-validation. We notice it decreases as the degree $p$ increases until $p=4$, then barely budges.  The second row shows the average training error in 5-fold cross validation. We notice it strictly decreases as $p$ increases (which makes sense, because over-fitting would lower the training error while increasing the test error). Interestingly, at the $p=1$ model, the average test data equals the average training data.
+
+\subsection*{(c)}
+
+```{r lastPlot,fig.height = 4,fig.align = "center"}
+zero2ten = 0:10 # Quick enumerating for indexing
+myerror<-do.call(rbind.data.frame,Map('c',zero2ten,test.list,training.list)) 
+      # Format data-frame for plotting
+(myPlot <- ggplot(aes(x=zero2ten),data =myerror) + geom_point(aes(y=test.list,size=10),col="Red") +
+      geom_point(aes(y=training.list,size=10),col="blue") + xlab("Degree") + ylab("Error") + ggtitle("Test and Training Error by Degree")+theme(legend.position="none")) # Generate plot
+```
+The training error and test error appear similar, but test error levels off asymptotically when $p$ is high even as training error continues to decrease. We recommend choosing the model where $p=4$, the point at which increasing $p$ no longer significantly reduces the test error. 
