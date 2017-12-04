@@ -1,0 +1,376 @@
+---
+title: "Homework Assignment"
+author: "Ted Tinker and Blake Shaw"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: pdf_document
+---
+
+
+```{r setup, echo=FALSE, include=FALSE}
+# install.packages("knitr")         # Only run if uninstalled
+# install.packages("tidyverse")
+# install.packages("tree")
+# install.packages("randomForest")
+# install.packages("gbm")
+# install.packages("ROCR")
+# install.packages("e1071")
+# install.packages("imager")
+# install.packages("ggplot2")
+
+
+library(knitr)
+library(tidyverse)
+library(tree)
+library(randomForest)
+library(gbm)
+library(ROCR)
+library(e1071)
+library(imager)
+library(ggplot2)
+# set global chunk options: images will be 7x5 inches
+knitr::opts_chunk$set(fig.width=7, fig.height=5)
+options(digits = 4)
+
+## indents are for indenting r code as formatted text
+## They may need to be adjusted depending on your OS
+# if your output looks odd, increase or decrease indent
+indent1 = '    '
+indent2 = '        '
+indent3 = '            '
+```
+
+
+\section*{Exercise 1}
+
+\subsection*{Part A}
+
+If we randomly sample $n$ observations from a set of $n$ observations with replacement, what is the probability that an observation $j$ is not included in the sample? This would imply that each of $n$ individual samples was one of the $n-1$ observations which was not $j$. So, the probability $j$ is not included should be $\left(\frac{n-1}{n}\right)^n$.
+
+\subsection*{Part B}
+
+```{r calculation}
+(999/1000)^1000
+```
+
+\subsection*{Part C}
+
+```{r verification}
+numbers <- c(1:1000)       # Integers 1-1000 for bootstrapping
+set.seed(999)              # For reproducibility
+unlist(lapply(1:10, function(x) {bootstrap <- sample(numbers,replace=TRUE)  
+                           # Make ten bootstraps
+                           (length(bootstrap) - length(unique(bootstrap)))/length(bootstrap)})) 
+                           # Print % missing
+```
+These samples line up very well with the expression produced above.
+
+\subsection*{Part D}
+
+```{r fieldGoals}
+shots <- c(rep(0,51),rep(1,50))   # 51 misses, 50 baskets
+set.seed(999)                     # For reproducibility
+fieldgoalList <- unlist(lapply(1:1000, function(x) {fieldgoals <- sample(shots,replace=TRUE) 
+                                                    sum(fieldgoals)/length(fieldgoals)})) 
+fieldHist <- hist(fieldgoalList,breaks=100) # Plot field goal percentages as histogram
+```
+I notice the data is slightly skewed left.
+
+```{r confidenceInt}
+(range <- quantile(fieldgoalList, probs=c(.025,.975)))  # 95% confidence interval
+```
+```{r printConfInt}
+plot(fieldHist)        
+abline(v = .4059,col="Red")
+abline(v = .5941,col="Red")     # Histogram plus confidence interval bounds
+```
+The long tail on the lest of the histogram provides statistical reason to suspect that Covington's true field goal percentage is lower than .495. The law of large numbers would suggest his abnormally high field goal percentage this quarter is an anomaly. 
+
+\section*{Exercise 2}
+
+```{r loadFaces}
+setwd("C:\\Users\\Theodore\\Desktop\\R_Studio_Stuff\\data")
+# setwd("C:\\Users\\Blake\\Documents\\PSTAT 131\\drug.csv") 
+     # Blake: switch this to your directory, then we can just trade off which is commented
+load("faces_array.RData")
+face_mat <- sapply(1:1000, function(i) as.numeric(faces_array[ , , i])) %>% t
+     # Load and prepare data
+
+plot_face <- function(image_vector)    # Function to display one picture
+  {plot(as.cimg(t(matrix(image_vector, ncol=100))), axes=FALSE, asp=1)}
+
+set.seed(999)
+plot_face(face_mat[sample(1000, 1),])  # Display a random photo as a test
+```
+
+\subsection*{Part A}
+
+```{r averageFace}
+plot_face(sapply(1:10000, function (x) {mean(face_mat[,x])})) 
+     # For each of 10,000 pixels, find the average
+```
+An eerie human face is visible as if through fog. It resembles the killer's mask in Halloween. 
+
+\subsection*{Part B}
+
+```{r PCA, cache=TRUE,results='hide'}
+face.PCA <- prcomp(face_mat[,1:10000],center=TRUE,scale=FALSE)
+face.PCA     # This chunk takes ages; cache it to save time
+```
+```{r pveVScumpve}
+pve <- (face.PCA$sdev^2) / sum(face.PCA$sdev^2)                   # Calculate pves
+cumulative_pve <- cumsum(face.PCA$sdev^2) / sum(face.PCA$sdev^2)  # Cumulative pves
+
+cumulative_pve[1:5]       # Only 5 columns are needed to account for 50%
+
+par(mfrow=c(1, 2))        # Side-by-side plots
+plot(pve, type="l", lwd=3)
+plot(cumulative_pve, type="l", lwd=3)
+abline(h=.5,col="Red")    # Add line at 50% variance explained
+abline(v=5,col="Green")   # Add line at 5 columns
+```
+Only 5 principle components are necessary to account for 50% of the data's variance. 
+
+\subsection*{Part C}
+
+```{r eigenfaces}
+par(mar=c(1,1,1,1))
+par(mfrow=c(4,4))  # Code provided for plotting 16 faces
+for (i in c(1:16)) {plot_face(face.PCA$rotation[,i])}
+```
+I find it interesting that the principle components become more 'precise' as the index increases, in that they seem to specify a particular person instead of a vaguely face-like blob. Much of the contrast seems to arise from differences in hair-style, skin-color, and lighting. 
+
+\subsection*{Part D}
+
+```{r firstComponent}
+par(mar=c(1,1,1,1))
+par(mfrow=c(2,5))   # Prepare plots for 2*5 image output
+highList <- face.PCA$rotation[,head(order(face.PCA$rotation[1,],decreasing=TRUE),5)]
+lowList <- face.PCA$rotation[,head(order(face.PCA$rotation[1,],decreasing=FALSE),5)]
+     # Make list of primary components with top/bottom 5 values in first entry
+for(i in c(1:5)) {plot_face(highList[,i])}
+for(i in c(1:5)) {plot_face(lowList[,i])}
+```
+It seems the first value in each primary component corresponds to particular areas of contrast around the facial features. The area outside an ovular face-region is noisy with no clear pattern.
+
+\subsection*{Part E}
+
+```{r fifthComponent}
+par(mar=c(1,1,1,1))
+par(mfrow=c(2,5))   # Prepare plots for 2*5 image output
+highList <- face.PCA$rotation[,head(order(face.PCA$rotation[5,],decreasing=TRUE),5)]
+lowList <- face.PCA$rotation[,head(order(face.PCA$rotation[5,],decreasing=FALSE),5)]
+     # Make list of primary components with top/bottom 5 values in fifth entry
+for(i in c(1:5)) {plot_face(highList[,i])}
+for(i in c(1:5)) {plot_face(lowList[,i])}
+```
+
+These images are much noisier than the previous examples. Interestingly a few faces appear amidst the noise (the clearest being on the right of the bottom row), perhaps justifying the explanatory purpose of this fifth value. However, the first value would seem more useful in reliably and consistantly identifying faces. 
+
+\section*{Exercise 3}
+
+\subsection*{Part A}
+
+```{r}
+library(ISLR)
+train = 1:1000
+Caravan$Purchase = ifelse(Caravan$Purchase == "Yes", 1, 0)
+Caravan.train = Caravan[train,]
+Caravan.test = Caravan[-train,]   # Load Caravan set, divide into test and training
+```
+
+\subsection*{Part B}
+```{r}
+set.seed(999)
+boosting.model = gbm(Purchase ~ ., data = Caravan.train, n.trees = 1000, shrinkage = 0.01,   
+                     distribution = "bernoulli")  # Make boosted model
+summary(boosting.model)
+```
+PPERSAUT, MKOOPLA, and MOPLHOOG have the three highest relative influences so they are the most important variables.
+
+\subsection*{Part C}
+```{r}
+set.seed(999)
+rand.forest <- randomForest(factor(Purchase) ~ ., data = Caravan.train, importance = T)
+rand.forest     # Make and display random forest
+```
+OOB estimate of error rate: 5.9%    
+No. of variables tried at each split: 9
+Number of trees: 500
+```{r}
+varImpPlot(rand.forest, sort=T, main="Variable Importance for rand.forest", n.var=5)
+```
+The order of important variables similar for both boosting and random forest models. MOPLHOOG is the highest variable of impotance in terms of model accuracy for the random forest model and is the second highest variable in terms of relative influence for the boosting model.  PPERSAUT and MKOOPKLA are both listed high as gini values for the random forest model and are listed high as variables in terms of relative influence for the the boosting model.
+
+\subsection*{Part D}
+```{r}
+boost.prob = predict(boosting.model, Caravan.test, n.trees = 1000, type = "response")
+boost.pred = ifelse(boost.prob > 0.2, 1, 0)
+table(Caravan.test$Purchase, boost.pred)    # Confusion matrix for boosting
+```
+```{r}
+rand.forest.pred= predict(rand.forest, Caravan.test, type = "class")
+table(Caravan.test$Purchase, rand.forest.pred)     # Conf matrix for forest
+```
+```{r}
+TPR.rand.forest <- 9 / (9 + 34)     # Calculate TPR
+TPR.rand.forest                     
+```
+
+
+\section*{Exercise 4}
+```{r}
+setwd("C:\\Users\\Theodore\\Desktop\\R_Studio_Stuff\\data")
+# setwd("C:\\Users\\Blake\\Documents\\PSTAT 131") 
+
+drug_use <- read_csv('drug.csv', col_names =      
+     c('ID','Age','Gender','Education','Country','Ethnicity','Nscore','Escore',
+       'Oscore','Ascore','Cscore','Impulsive','SS','Alcohol','Amphet','Amyl',
+       'Benzos','Caff','Cannabis','Choc','Coke','Crack','Ecstasy','Heroin',
+       'Ketamine','Legalh','LSD','Meth','Mushrooms','Nicotine','Semer','VSA'))
+
+# After reading in drug_use, format the data as we did on the midterm:
+
+drug_use <- drug_use %>% mutate_at(as.ordered, .vars=vars(Alcohol:VSA))
+drug_use <- drug_use %>%
+mutate(Gender = factor(Gender, labels=c("Male", "Female"))) %>%
+mutate(Ethnicity = factor(Ethnicity, labels=c("Black", "Asian", "White",
+"Mixed:White/Black", "Other",
+"Mixed:White/Asian",
+"Mixed:Black/Asian"))) %>%
+mutate(Country = factor(Country, labels=c("Australia", "Canada", "New Zealand",
+"Other", "Ireland", "UK", "USA")))
+
+# Then add recent cannabis use column:
+
+drug_use <- drug_use %>%
+mutate(recent_cannabis_use = ifelse(Cannabis=="CL0" | Cannabis=="CL1" | Cannabis=="CL2", "No", "Yes")) %>%
+mutate(recent_cannabis_use = factor(recent_cannabis_use, labels = c("No", "Yes")))
+
+drug_use <- select(drug_use,Age:SS, recent_cannabis_use)   # Choose columns
+```
+
+\subsection*{Part A}
+```{r}
+smp_size <- floor((1500 / 1885) * nrow(drug_use))
+set.seed(999)
+train_ind <- sample(seq_len(nrow(drug_use)), size = smp_size)
+
+train.drug <- drug_use[train_ind, ]
+test.drug <- drug_use[-train_ind, ]   # Set training and test data
+
+svm.model <- svm(recent_cannabis_use ~ ., data = train.drug, kernel = "radial", cost = 1)
+     # Make support vector machine
+table(test.drug$recent_cannabis_use, predict(svm.model,test.drug[,-13]))  
+     # SVM conf matrix
+```
+
+
+\subsection*{Part B}
+```{r}
+tune.out <- tune(svm, recent_cannabis_use ~ ., data = train.drug, kernel = "radial", ranges =         list(cost=c(0.001, 0.01, 0.1,1,10,100)))
+summary(tune.out)
+```
+The error seems to be minimized when the cost equals 1. Since this was the cost of the first Support Vector Machine we generated, the best model's confusion matrix will be identical to the previous one:
+
+```{r bestSVM}
+table(test.drug$recent_cannabis_use, predict(tune.out$best.model,test.drug[,-13]))  
+     # Best SVM conf matrix
+```
+
+\section*{Exercise 5}
+
+\subsection*{Part A}
+
+```{r loadCSV}
+setwd("C:\\Users\\Theodore\\Desktop\\R_Studio_Stuff\\data")
+# setwd("C:\\Users\\Blake\\Documents\\PSTAT 131") 
+dat <- read_csv("nonlinear.csv")
+ggplot() +
+     geom_point(data=dat[1:24,],aes(x=X1,y=X2),color="red") +
+     geom_point(data=dat[25:72,],aes(x=X1,y=X2),color="blue")
+     # Plot points where Y=0 in red, and points where Y=1 in blue
+```
+Observations of type $Y = 0$ seem to be clustered more closely than observations of type $Y = 1$.
+
+\subsection*{Part B}
+
+```{r logReg}
+# grid of points over sample space
+gr <- expand.grid(X1=seq(-5, 5, by=0.1), # sample points in X1
+X2=seq(-5, 5, by=0.1)) # sample points in X2
+
+model <- glm(Y~X1+X2,family=binomial(link='logit'),data=dat)
+
+predictions <- predict(model,gr,type="response")   # Predictions in logit form
+predictions <- sapply(1:length(predictions), function (x) {
+     if(predictions[[x]]>=.5) {predictions[[x]]=1} 
+     else {predictions[[x]]=0}})
+     # Threshold: when the odds are 1-1 or better, assume Y=1. Otherwise 0.
+
+gr["predictions"] <- predictions
+gr.0 <- gr[predictions==0,]
+gr.1 <- gr[predictions==1,]
+
+ggplot() +
+     geom_point(data=gr.0,aes(x=X1,y=X2),color="red") +
+     geom_point(data=gr.1,aes(x=X1,y=X2),color="blue")
+     # Plot the prediction of each grid point
+```
+As a linear model, a straight line cannot totally capture the clustering we observed in part a.
+
+\subsection*{Part C}
+
+```{r poly}
+model2 <- glm(Y~poly(X2,5)+poly(X1,2),family=binomial(link='logit'),data=dat)
+summary(model2)
+```
+```{r boundary}
+gr2 <- expand.grid(X1=seq(-5, 5, by=0.1), # sample points in X1
+X2=seq(-5, 5, by=0.1)) # sample points in X2
+
+predictions2 <- predict(model2,gr2,type="response")
+predictions2 <- sapply(1:length(predictions2), function (x) {
+     if(predictions2[[x]]>=.5) {predictions2[[x]]=1} 
+     else {predictions2[[x]]=0}})
+     # Threshold: when the odds are 1-1 or better, assume Y=1. Otherwise 0.
+
+gr2["predictions2"] <- predictions2
+gr2.0 <- gr2[predictions2==0,]
+gr2.1 <- gr2[predictions2==1,]
+
+ggplot() +
+     geom_point(data=gr2.0,aes(x=X1,y=X2),color="red") +
+     geom_point(data=gr2.1,aes(x=X1,y=X2),color="blue")
+```
+A red ovular region covers the clump observed in part B. There is a red region along the top where data was less dense. 
+
+\subsection*{Part D}
+
+```{r poly5}
+model5 <- glm(Y~poly(X2,5)+poly(X1,5),family=binomial(link='logit'),data=dat)
+summary(model5)
+```
+
+```{r boundary5}
+gr5 <- expand.grid(X1=seq(-5, 5, by=0.1), # sample points in X1
+X2=seq(-5, 5, by=0.1)) # sample points in X2
+
+predictions5 <- predict(model5,gr5,type="response")
+predictions5 <- sapply(1:length(predictions5), function (x) {
+     if(predictions5[[x]]>=.5) {predictions5[[x]]=1} 
+     else{predictions5[[x]]=0}})
+     # Threshold: when the odds are 1-1 or better, assume Y=1. Otherwise 0.
+
+gr5["predictions5"] <- predictions5
+gr5.0 <- gr5[predictions5==0,]
+gr5.1 <- gr5[predictions5==1,]
+
+ggplot() +
+     geom_point(data=gr5.0,aes(x=X1,y=X2),color="red") +
+     geom_point(data=gr5.1,aes(x=X1,y=X2),color="blue")
+```
+The region covering the clump is not much more accurate, but the red area along the sides has grown. Perhaps this is the result of overfitting.
+
+\subsection*{Part E}
+
+The linear model cannot capture the nonseperable ovular clumping of the data. The fifth polynomial case has too much overfitting causing areas of error along the edges. The second degree polynomial model has probably the best balance of attributes, representing the clumping but with a smaller region of error.
