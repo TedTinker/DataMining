@@ -1,0 +1,240 @@
+---
+title: "Ted Tinker's Midterm"
+author: "Ted Tinker"
+date: "November 10, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# install.packages("tidyverse")
+# install.packages("ROCR")
+# install.packages("tree")
+# install.packages("maptree")
+# install.packages("class")
+# install.packages("lattice")
+# install.packages("dendextend")
+
+library(tidyverse)
+library(ROCR)
+library(tree)
+library(maptree)
+library(class)
+library(lattice)
+library(dendextend)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r readDrug, include = TRUE}
+setwd("/Users/Theodore/Desktop/R_Studio_Stuff/data")
+drug_use <- read_csv('drug.csv',
+col_names = c('ID','Age','Gender','Education','Country','Ethnicity',
+'Nscore','Escore','Oscore','Ascore','Cscore','Impulsive',
+'SS','Alcohol','Amphet','Amyl','Benzos','Caff','Cannabis',
+'Choc','Coke','Crack','Ecstasy','Heroin','Ketamine',
+'Legalh','LSD','Meth','Mushrooms','Nicotine','Semer','VSA'))
+```
+
+\section*{Exercise One}
+
+```{r mutateDrugs}
+drug_use <- drug_use %>% mutate_at(as.ordered, .vars=vars(Alcohol:VSA))
+drug_use <- drug_use %>%
+mutate(Gender = factor(Gender, labels=c("Male", "Female"))) %>%
+mutate(Ethnicity = factor(Ethnicity, labels=c("Black", "Asian", "White",
+"Mixed:White/Black", "Other",
+"Mixed:White/Asian",
+"Mixed:Black/Asian"))) %>%
+mutate(Country = factor(Country, labels=c("Australia", "Canada", "New Zealand",
+"Other", "Ireland", "UK", "USA")))
+```
+
+This code is given in the homework to factorise the irregularly normalized dataset.
+
+\subsection*{A}
+
+```{r recentCann}
+drug_use <- cbind(mutate(drug_use,recent_cannabis_use= factor(
+                                    ifelse(Cannabis %in% c("CL3","CL4","CL5","CL6"),"Yes","No"))))
+```
+
+Adds a column of boolean factors based on the column Cannabis.
+
+\subsection*{B}
+
+```{r subData}
+seed=(100)  # For consistency
+drug_use_subset <- select(drug_use,Age:SS, recent_cannabis_use)   # Choose columns
+train.indices = sample(1:nrow(drug_use_subset), 1500)             # Randomize sample
+drug_use_train=drug_use_subset[train.indices,]                    # Set training
+drug_use_test=drug_use_subset[-train.indices,]                    # Set test
+
+dim(drug_use_train)    # Print sizes
+dim(drug_use_test)
+```
+
+The resulting data-sets are of the expected sizes.
+
+\subsection*{C}
+
+```{r logReg}
+drug.log <- glm(recent_cannabis_use~.,family="binomial", data=drug_use_train) # Make GL Model
+summary(drug.log)
+```
+
+
+
+\subsection*{D}
+
+As a binomial general linear model, the predictions are made in log-odds form. Given a male's predictors, and finding his log-odds $P$, a female with the same predictors would have log-odds $P-0.78153$. Therefore, the female's $odds$ (as opposed to log-odds) would be lower than the man's. If the female were 2 age-units older than the male, they would have log-odds $P-0.78153 - 2\times -0.90433$.
+
+\section*{Exercise Two}
+
+```{r makeTree}
+drugTree <- tree(recent_cannabis_use~.,data=drug_use_train,
+                 control=tree.control(nobs=nrow(drug_use_train), minsize=10, mindev=1e-3))
+```
+
+This code is given in the homework
+
+\subsection*{A}
+
+```{r treeTest}
+cv.tree(drugTree) # Default values should be right for 10-fold validation
+```
+
+The best size for the tree seems to fluctuate when the code is run repeatedly, despite setting the seed. The best size hovers around 6 leaf nodes, where the deviation is generally minimal with minimal size.
+
+\clearpage
+\subsection*{B}
+
+```{r pruning}
+drugTree <- prune.tree(drugTree,best=6)  # Prune tree
+draw.tree(drugTree,nodeinfo=TRUE)        # Draw tree
+```
+The first variable to be split is Country.
+
+\subsection*{C}
+
+```{r testTree}
+table(drug_use_test$recent_cannabis_use, predict(drugTree,drug_use_test[,-13],type="class")) # Conf
+```
+The True Positive Rate is equal to the number of True Positives divided by the number of True Positives plus False Negatives. In this confusion matrix, True Positives are represented by "Yes," "Yes." False Negatives are represented by "Yes," "No." So (using a particular iteration of the code because repeated iterations seem to fluctuate), $TPR = \frac{147}{147+64} \approx .69668$.
+
+Similarly, The False Positive Rate is equal to the number of False Positives divided by the number of False Positives plus True Negatives. In this confusion matrix, False positives are represented by "No," "Yes." True negatives are represented by "No," "No." So, $FPR = \frac{25}{149+25} \approx .14369$.
+
+\section*{Exercise Three}
+
+\subsection*{A}
+
+```{r studio ROCcurves}
+pred.tree <- predict(drugTree,drug_use_test[,-13],type="class") # Predict test values with tree
+pred.log <- predict(drug.log,drug_use_test[,-13], type="response")    # Predict test values with logistic reg
+pred1<-prediction(as.numeric(pred.tree),as.numeric(drug_use_test$recent_cannabis_use))                   
+pred2<-prediction(as.numeric(pred.log),as.numeric(drug_use_test$recent_cannabis_use))
+perftree= performance(pred1, measure="tpr", x.measure="fpr")    # Measaure performance of tree
+perflog=performance(pred2,measure = "tpr",x.measure = "fpr")    # Measure performance of logreg
+plot(perftree, col="red", lwd=2, main="ROC curves")
+plot(perflog,col="blue",lwd=2.5,add=TRUE)                       # Plot FPR vs TPR
+legend(.5,.2, c("Tree ROC","Log Reg ROC"), lty=c(1,1),lwd=c(2.5,2.5),col=c("red","blue"))
+```
+
+The prediction tree's ROC curve is simple and geometric. The Logistic Regression's ROC curve is more typically curved. 
+
+\clearpage
+\subsection*{B}
+
+```{r AUC}
+auctree = performance(pred1, "auc")@y.values  # Measure performances and print
+auclog=performance(pred2,"auc")@y.values
+print(auctree)
+print(auclog)
+```
+The prediction tree has a much lower AUC than the logistic regression. We might say this means the logistic regression is "better" regarding TPR and FPR---though the tree might be preferable in a situation where interpretability was most important.
+
+\section*{Exercise Four}
+
+```{r readLeuk, include = FALSE}
+setwd("/Users/Theodore/Desktop/R_Studio_Stuff/data")
+leukemia_data <- read_csv("leukemia_data.csv")
+mutate(leukemia_data, Type= factor(Type))    # Initial setup and factoring
+```
+We do not include the reading-in of data as it is far too lengthy. 
+
+\subsection*{A}
+
+```{r leukemiaType}
+table(leukemia_data$Type)
+```
+The most common types of leukemia are TEL-AML1 and "Others." The least common type is BCR-ABL, with only 15 observations.
+
+\clearpage
+\subsection*{B}
+
+```{r PCA, include=FALSE}
+leuk.PCA <- prcomp(leukemia_data[,-1],center=TRUE,scale=FALSE) # Principle component analysis
+leuk.PCA
+```
+
+```{r sideBySidePlots}
+pve <- (leuk.PCA$sdev^2) / sum(leuk.PCA$sdev^2)
+cumulative_pve <- cumsum(leuk.PCA$sdev^2) / sum(leuk.PCA$sdev^2)
+## This will put the next two plots side by side
+par(mfrow=c(1, 2))
+## Plot proportion of variance explained
+plot(pve, type="l", lwd=3)
+plot(cumulative_pve, type="l", lwd=3)
+```
+
+As expected, the first few components represent the most variance. It takes less than fifty columns to account for more than half the information.
+
+\subsection*{C}
+
+```{r twoComponentPlot,fig.height=3.75}
+rainbow_colors <- rainbow(7)
+plot_colors <- # The provided code did not work for me. I use a different method.
+   with(leukemia_data,
+        data.frame(Type = c("BCR-ABL","E2A-PBX1","Hyperdip50","MLL","OTHERS","T-ALL","TEL-AML1"),
+                   color = rainbow_colors))      
+plot(PC2~PC1,leuk.PCA$x[,1:2],col=plot_colors$color[match(leukemia_data$Type, plot_colors$Type)])
+```
+Bands of color are generally oriented vertically, but slant toward the upper-right corner as PC1 increases. The green band is visibly shifted rightward compared to the other colors. 
+
+```{r addLabels, fig.height=3.75}
+plot(PC2~PC1,leuk.PCA$x[,1:2],col=plot_colors$color[match(leukemia_data$Type, plot_colors$Type)])
+with(leuk.PCA,text(x=leuk.PCA$x[,1],y=leuk.PCA$x[,2],labels=leukemia_data$Type)) # Add labels
+```
+Judging from the labels, the green band represents T-ALL. 
+\clearpage
+```{r absoluteLoadings}
+absoluteLoadings <- leuk.PCA$rotation[sort.list(abs(as.double(
+  leuk.PCA$rotation[,1])),decreasing=TRUE),1] # Get loadings, make positive, and sort.
+head(absoluteLoadings,6)
+```
+(Professor, thank you for your advice after class---I misunderstood the way order() returns the ordering of the set.) The six most influential and highest-weighted variables represented by PC1 are listed above, with their weights. On a lark, I've elected to find the most influential loadings in PC2 as well:
+
+```{r absoluteLoadings2}
+absoluteLoadings2 <- leuk.PCA$rotation[sort.list(abs(as.double(
+  leuk.PCA$rotation[,2])),decreasing=TRUE),2]
+head(absoluteLoadings2,6)
+```
+None of the six most heavily weighted variables are shared. I suppose this makes sense, because PC1 and PC2 are meant to be uncorrelated. 
+
+\subsection*{F}
+
+```{r filter, fig.height=3.5}
+leukemia_subset <- dplyr::filter(leukemia_data, Type %in% c("T-ALL","TEL-AML1","Hyperdip50"))
+# Be sure to use dplyr::filter not default filter
+distances <- dist(leukemia_subset,diag=TRUE,upper=TRUE) # Defaults to Euclidean
+leuk.clust <- hclust(distances)    # Defaults to complete linkages
+plot(leuk.clust) # Plot Dendogram
+```
+
+\subsection*{G}
+
+```{r extraCredit}
+distances <- as.matrix(distances) # Transform from vector
+levelplot(distances[leuk.clust$order,leuk.clust$order], at=pretty(c(20,50),n=10)) # Make plot
+leukemia_subset$Type[leuk.clust$order]
+```
+
+The "T-All" observations are almost contained in one continuous chunk, but "TEL-AML1" and "Hyperdip50" are somewhat mixed. The latter two are probably more similar in terms of their genetic distribution than either of them are to "T-All."
