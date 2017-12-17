@@ -5,7 +5,7 @@ Three homework assignments (Two completed with Lilian Lu, one with Blake Shaw)
 
 One midterm (Completed alone) 
 
-One final project (Partner Pending)
+One final project (Completed with Lilian Lu)
 
 Each project consists of an R Markdown file and the PDF which it results in when knit. 
-Knitning an R Markdown file requires RStudio, TeX, and a variety of libraries.
+Kniting an R Markdown file requires RStudio, TeX, and a variety of libraries.
